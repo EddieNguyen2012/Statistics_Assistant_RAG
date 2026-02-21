@@ -1,13 +1,17 @@
-from Ingestion import DocIngestion
-from vector_db_utils import Database
+from src.Ingestion import DocIngestion
+from src.vector_db_utils import Database
 import os
 from sentence_transformers import SentenceTransformer
-from langchain_core.documents import Document
 from langchain_community.chat_models import ChatOllama
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
 
 ## From Gemini for summarizing page
 # 1. Define the structure you want the LLM to return
@@ -36,9 +40,10 @@ chain = llm | parser | prompt
 #   'total_pages', 'page', 'page_label'
 
 def extract_metadata_by_page(chunks: list[Document]):
+    chunk_ids = []
     enriched_chunks = []
     metadata = chunks[0].metadata
-    print(f"Extracting topics from page {metadata['page']}/{metadata['total_pages']} of {metadata['title']}.")
+    print(f"Extracting topics from page {metadata['page']}/{metadata['total_pages']}.")
 
     for i, chunk in enumerate(chunks):
         original_meta = chunk.metadata
@@ -51,7 +56,6 @@ def extract_metadata_by_page(chunks: list[Document]):
             prediction = {"heading": "General Statistics", "summary": "Discussion on assumptions."}
 
         new_metadata = {
-            "chunk_id": f"stat_doc_{i:03}",
             "heading": prediction.get("heading"),
             "summary": prediction.get("summary"),
             "page": original_meta.get("page", 0) + 1,
@@ -62,20 +66,21 @@ def extract_metadata_by_page(chunks: list[Document]):
 
         chunk_id = f"stats_book_p{chunk.metadata['page']}_c{i}"
         chunk.metadata = new_metadata
-        enriched_chunks.append((chunk_id, chunk))
-
+        enriched_chunks.append(chunk)
+        chunk_ids.append(chunk_id)
         if i % 10 == 0: print(f"Processed {i}/{len(chunks)} chunks...")
 
-    return enriched_chunks[0], enriched_chunks[1]
+    return chunk_ids, enriched_chunks
 
 if __name__=="__main__":
     db = Database()
     ingestor = DocIngestion(docs_path='../RAG_Docs', chunk_size=100, chunk_overlap=20)
     files = [file for file in os.listdir(ingestor.docs_path) if not file.startswith('.')]
-    model = SentenceTransformer("all-MiniLM-L6-v2")
+    model = SentenceTransformer("all-MiniLM-L6-v2", token=os.environ["HF_TOKEN"])
 
     # I am worried about in-place memory usage when batch chunking so I decided to chunk individually
     for file in files:
+        print(f"Processing {file}")
         chunks = ingestor.individual_ingest(os.path.join(ingestor.docs_path, file))
         current_page = 0
         current_chunks = []
