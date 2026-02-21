@@ -2,7 +2,6 @@ from logging import raiseExceptions
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 import os
-from astrapy import DataAPIClient
 from dotenv import load_dotenv
 import re
 import unicodedata
@@ -11,8 +10,6 @@ import numpy as np
 
 load_dotenv()
 doc_path = '../RAG_Docs'
-ENDPOINT = os.getenv("ASTRA_DB_API_ENDPOINT")
-TOKEN = os.getenv("ASTRA_DB_APPLICATION_TOKEN")
 
 # Static Methods
 
@@ -21,20 +18,6 @@ def path_validate(path: str):
         return False
     else:
         return True
-
-
-# Dynamic Methods
-class DBConnector:
-    def __init__(self):
-        client = DataAPIClient()
-        self.db = client.get_database(ENDPOINT, token=TOKEN)
-
-    def test_db_connection(self):
-        if self.db is not None:
-            print(f"Connected to Astra DB: {self.db.name()}")
-            print(f"Collections: {self.db.list_collection_names()}")
-        else:
-            print("Not connected to Astra DB")
 
 # Helped by ChatGPT to generalize cleaning steps
 
@@ -100,12 +83,14 @@ class DocIngestion:
         self.chunk_overlap = -1
         self.splitter = None
         self.update_splitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+        self.page_map = None
 
     def batch_ingest(self):
+        chunks = []
         for file in [f for f in os.listdir(self.docs_path) if not f.startswith('.')]: # Get all files name for ingestion
             res = self.individual_ingest(file)
-            return res
-        return None
+            chunks.append(res)
+        return chunks
 
     # Return True if the file is loaded successfully, False otherwise
     def individual_ingest(self, filename: str):
