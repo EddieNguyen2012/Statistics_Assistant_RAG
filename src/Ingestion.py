@@ -76,6 +76,8 @@ def preprocess_docs(docs):
 # My work
 
 
+
+
 class DocIngestion:
     def __init__(self, docs_path: str, chunk_size=100, chunk_overlap=20):
         self.docs_path = docs_path if path_validate(docs_path) else raiseExceptions
@@ -135,6 +137,7 @@ class DocIngestion:
             print(f"Current splitter: name={self.splitter.__class__}, chunk_size={self.chunk_size}, chunk_overlap={self.chunk_overlap}")
         except Exception as e:
             print(f"Unexpected error updating splitter: {e}")
+
 
 
 

@@ -1,5 +1,4 @@
 from src.Ingestion import DocIngestion
-from src.vector_db_utils import Database
 import os
 from sentence_transformers import SentenceTransformer
 from langchain_community.chat_models import ChatOllama
@@ -43,7 +42,7 @@ def extract_metadata_by_page(chunks: list[Document]):
     chunk_ids = []
     enriched_chunks = []
     metadata = chunks[0].metadata
-    print(f"Extracting topics from page {metadata['page']}/{metadata['total_pages']}.")
+    # print(f"Extracting topics from page {metadata['page']}/{metadata['total_pages']}.")
 
     for i, chunk in enumerate(chunks):
         original_meta = chunk.metadata
@@ -68,15 +67,12 @@ def extract_metadata_by_page(chunks: list[Document]):
         chunk.metadata = new_metadata
         enriched_chunks.append(chunk)
         chunk_ids.append(chunk_id)
-        if i % 10 == 0: print(f"Processed {i}/{len(chunks)} chunks...")
+        # if i % 10 == 0: print(f"Processed {i}/{len(chunks)} chunks...")
 
     return chunk_ids, enriched_chunks
 
-if __name__=="__main__":
-    db = Database()
-    ingestor = DocIngestion(docs_path='../RAG_Docs', chunk_size=100, chunk_overlap=20)
+def populate_db(conn, ingestor, collection):
     files = [file for file in os.listdir(ingestor.docs_path) if not file.startswith('.')]
-    model = SentenceTransformer("all-MiniLM-L6-v2", token=os.environ["HF_TOKEN"])
 
     # I am worried about in-place memory usage when batch chunking so I decided to chunk individually
     for file in files:
@@ -90,6 +86,7 @@ if __name__=="__main__":
             else:
                 if len(current_chunks) > 0:
                     ids, current_chunks = extract_metadata_by_page(current_chunks)
-                    db.insert_doc(ids=ids, docs=current_chunks, collection='Stat-RAG')
+                    conn.insert_doc(ids=ids, docs=current_chunks, collection=collection)
                 current_chunks = []
                 current_page += 1
+

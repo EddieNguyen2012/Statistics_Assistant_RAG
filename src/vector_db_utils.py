@@ -1,17 +1,24 @@
 import os
 import chromadb
+from chromadb.api.models.Collection import Collection
 from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
+from langchain_classic.retrievers import EnsembleRetriever
+from langchain_community.retrievers import BM25Retriever
+from langchain_community.vectorstores import Chroma
 from langchain_core.documents import Document
 from dotenv import load_dotenv
+from sentence_transformers import SentenceTransformer
+from langchain_huggingface import HuggingFaceEmbeddings
+from src.pipeline import populate_db
+from src.Ingestion import DocIngestion
+from chromadb.config import Settings
 
 load_dotenv()
 hf_token = os.getenv("HF_TOKEN")
-
+#
 
 def connect_db(path='./vector_db'):
     client = chromadb.PersistentClient(path=path)
-    if len(client.list_collections()) == 0:
-        client.create_collection('Stat-RAG', embedding_function=SentenceTransformerEmbeddingFunction(token=hf_token))
     return client
 
 
@@ -67,3 +74,62 @@ class Database:
 
     def reset_db(self):
         self.client.reset()
+
+    def get_or_init_collection(self):
+        try:
+            self.client.get_collection('Stat-RAG-200-100')
+            return self
+        except Exception as e:
+            print(f"Error: No collection found in the database. Populating the database...")
+            self.client.create_collection('Stat-RAG-200-100',
+                                          embedding_function=SentenceTransformerEmbeddingFunction(token=hf_token))
+            populate_db(conn=self, ingestor=DocIngestion(docs_path='../RAG_Docs', chunk_size=200, chunk_overlap=100),
+                        collection='Stat-RAG-200-100')
+            return self
+
+
+    def adjust_ingestor(self, chunk_size=-1, chunk_overlap=-1):
+        if chunk_size != -1 and chunk_overlap != -1:
+            collection_name = f'Stat-RAG-{chunk_size}-{chunk_overlap}'
+            self.client.create_collection(collection_name,
+                                     embedding_function=SentenceTransformerEmbeddingFunction(token=hf_token))
+            populate_db(self, ingestor=DocIngestion(docs_path='../RAG_Docs', chunk_size=chunk_size, chunk_overlap=chunk_overlap), collection=collection_name)
+
+    def get_retriever(self, collection='Stat-RAG-200-100'):
+
+        try:
+            self.get_collection(collection)
+            model_name = "sentence-transformers/all-MiniLM-L6-v2"
+
+            # Initialize the embeddings object
+            embeddings = HuggingFaceEmbeddings(model_name=model_name)
+
+            vector_stores = Chroma(
+                persist_directory='./vector_db',
+                embedding_function=embeddings,
+                collection_name=collection,
+
+            )
+
+            chroma_retriever = vector_stores.as_retriever(
+                search_type='similarity',
+                search_kwargs={"k": 3}
+            )
+
+            data = vector_stores.get(include=['documents', 'metadatas'])
+            all_docs = [
+                Document(page_content=text, metadata=metadata) for text, metadata in zip(data['documents'], data['metadatas'])
+            ]
+
+            bm25_retriever = BM25Retriever.from_documents(documents=all_docs)
+            bm25_retriever.k = 3
+
+            ensemble_retriever = EnsembleRetriever(
+                retrievers=[bm25_retriever, chroma_retriever],
+                weights=[0.2, 0.8]
+            )
+
+            return ensemble_retriever
+        except Exception as e:
+            print(f"Error: {e}")
+
