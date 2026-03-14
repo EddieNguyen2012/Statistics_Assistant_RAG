@@ -1,92 +1,92 @@
-from src.Ingestion import DocIngestion
-import os
-from sentence_transformers import SentenceTransformer
-from langchain_community.chat_models import ChatOllama
-from langchain_core.documents import Document
+
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import JsonOutputParser
-from pydantic import BaseModel, Field
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables.passthrough import RunnablePassthrough
 from dotenv import load_dotenv
+from src.vector_db_utils import Database
 
 load_dotenv()
 
+def format_docs(docs):
+    """
+    Formats a list of Document objects into a single string.
+    Each document is formatted with its metadata (title, author, subject, page, heading) and summary.
 
+    Args:
+        docs (list[Document]): A list of Document objects to format.
 
-## From Gemini for summarizing page
-# 1. Define the structure you want the LLM to return
-class ChunkEnrichment(BaseModel):
-    heading: str = Field(description="The specific section or chapter title this text belongs to.")
-    summary: str = Field(description="A 1-sentence summary of the statistical concepts discussed.")
+    Returns:
+        str: A formatted string containing the combined content and metadata of the documents.
+    """
+    blocks = []
+    for d in docs:
+        md = d.metadata or {}
 
-# 2. Initialize Ollama
-# We set temperature to 0 for consistent, factual metadata extraction
-llm = ChatOllama(model="llama3.1", format="json", temperature=0)
-parser = JsonOutputParser(pydantic_object=ChunkEnrichment)
+        # Build a compact header line from your metadata fields
+        header_parts = []
+        if md.get("title"):   header_parts.append(f"Title: {md['title']}")
+        if md.get("author"):  header_parts.append(f"Author: {md['author']}")
+        if md.get("subject"): header_parts.append(f"Subject: {md['subject']}")
+        if md.get("page") is not None: header_parts.append(f"Page: {md['page']}")
+        if md.get("heading"): header_parts.append(f"Heading: {md['heading']}")
 
-# 3. Create the Enrichment Chain
-prompt = ChatPromptTemplate.from_template(
-    "You are a statistical assistant. Analyze the following text chunk from a book.\n"
-    "Extract a concise heading and a 1-sentence summary.\n"
-    "{format_instructions}\n"
-    "Text: {context}"
-)
-chain = llm | parser | prompt
-##
+        header = " | ".join(header_parts)
 
-# Default metadata from LangChain:
-#   'producer', 'creator', 'creationdate', 'author', 'category', 'comments',
-#   'company', 'keywords', 'moddate', 'sourcemodified', 'subject', 'title', 'source',
-#   'total_pages', 'page', 'page_label'
+        # Put summary above the excerpt (optional, but useful)
+        summary = md.get("summary")
+        summary_line = f"Summary: {summary}" if summary else ""
 
-def extract_metadata_by_page(chunks: list[Document]):
-    chunk_ids = []
-    enriched_chunks = []
-    metadata = chunks[0].metadata
-    # print(f"Extracting topics from page {metadata['page']}/{metadata['total_pages']}.")
+        block = "\n".join([x for x in [header, summary_line, "Excerpt:", d.page_content] if x])
+        blocks.append(block)
 
-    for i, chunk in enumerate(chunks):
-        original_meta = chunk.metadata
-        try:
-            prediction = chain.invoke({
-                "context": chunk.page_content[:1000],  # Send first 1k chars to save tokens
-                "format_instructions": parser.get_format_instructions()
-            })
-        except Exception as e:
-            prediction = {"heading": "General Statistics", "summary": "Discussion on assumptions."}
+    return "\n\n---\n\n".join(blocks)
 
-        new_metadata = {
-            "heading": prediction.get("heading"),
-            "summary": prediction.get("summary"),
-            "page": original_meta.get("page", 0) + 1,
-            "title": original_meta.get("title", "Testing Statistical Assumptions"),
-            "subject": original_meta.get("subject", ""),
-            "author": original_meta.get("author", "Unknown")
-        }
+def pipeline(model, collection='Stat-RAG-200-100'):
+    """
+    Initializes the RAG pipeline by setting up the database, retriever, and prompt template.
 
-        chunk_id = f"stats_book_p{chunk.metadata['page']}_c{i}"
-        chunk.metadata = new_metadata
-        enriched_chunks.append(chunk)
-        chunk_ids.append(chunk_id)
-        # if i % 10 == 0: print(f"Processed {i}/{len(chunks)} chunks...")
+    Args:
+        model: The LLM model to be used in the pipeline.
+        collection (str, optional): The name of the collection to use. Defaults to 'Stat-RAG-200-100'.
 
-    return chunk_ids, enriched_chunks
+    Returns:
+        EnsembleRetriever: The retriever configured for the pipeline.
+    """
+    db = Database()
+    db = db.get_or_init_collection()
+    ret = db.get_retriever(collection)
+    llm = model
 
-def populate_db(conn, ingestor, collection):
-    files = [file for file in os.listdir(ingestor.docs_path) if not file.startswith('.')]
+    load_dotenv()
 
-    # I am worried about in-place memory usage when batch chunking so I decided to chunk individually
-    for file in files:
-        print(f"Processing {file}")
-        chunks = ingestor.individual_ingest(os.path.join(ingestor.docs_path, file))
-        current_page = 0
-        current_chunks = []
-        for i, chunk in enumerate(chunks):
-            if chunk.metadata['page'] == current_page:
-                current_chunks.append(chunk)
-            else:
-                if len(current_chunks) > 0:
-                    ids, current_chunks = extract_metadata_by_page(current_chunks)
-                    conn.insert_doc(ids=ids, docs=current_chunks, collection=collection)
-                current_chunks = []
-                current_page += 1
+    system_template = """
+    ### Role
+    You are a helpful Statistics Graduate Assistant.
 
+    ### Instructions
+    1. **Prioritize the Context:** Use the provided snippets to answer the user's question first.
+    2. **Supplement if Needed:** If the context is missing specific details, says from the supplement documents, you can't answer the question.
+    3. **Be Concise:** Get straight to the point but answer all the questions and requests.
+    4. **Be Credible** Provide in-text citations (MLA format) of the materials you used.
+    5. **Consistent** Provide in the structure: answer then citations at the end following MLA format
+    ### Context
+    {context}
+
+    ### Question
+    {question}
+    """
+
+    prompt_template = ChatPromptTemplate.from_messages([
+        ("system", system_template),
+        ("human", "{question}")
+    ])
+
+    # return ret
+    chain = (
+            {'context': ret | format_docs, "question": RunnablePassthrough()}
+            | prompt_template
+            | llm
+            | StrOutputParser()
+    )
+
+    return chain
