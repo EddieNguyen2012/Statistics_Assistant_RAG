@@ -1,5 +1,5 @@
 from langsmith import evaluate, traceable
-from src.pipeline import pipeline
+from src.pipeline import pipeline_enforced
 from langsmith import Client
 from pathlib import Path
 import pandas as pd
@@ -160,7 +160,7 @@ if __name__ == "__main__":
     # The path to your local CSV file
     csv_file = str(parent_dir.parent / "evaluation.csv")
     df = pd.read_csv(csv_file)
-    chain = pipeline(model=ChatOllama(model='gemma3', temperature=0), collection='Stat-RAG-250-100')
+    chain = pipeline_enforced(model=ChatOllama(model='gemma3', temperature=0))
 
     ds = []
     for entry in df.iterrows():

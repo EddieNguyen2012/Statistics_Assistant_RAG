@@ -21,7 +21,7 @@ class Citation(BaseModel):
 
 class RAGResponse(BaseModel):
     answer: str = Field(description="The answer to the user's question.")
-    citations: List[Citation] = Field(description="A list of sources cited.")
+    citations: List[Citation] = Field(default_factory=list,description="A list of sources cited.")
 
     def to_str(self):
         return f'{self.answer}'
@@ -50,15 +50,12 @@ def format_docs(docs):
         if md.get("author"):  header_parts.append(f"Author: {md['author']}")
         if md.get("subject"): header_parts.append(f"Subject: {md['subject']}")
         if md.get("page") is not None: header_parts.append(f"Page: {md['page']}")
-        if md.get("heading"): header_parts.append(f"Heading: {md['heading']}")
 
         header = " | ".join(header_parts)
 
-        # Put summary above the excerpt (optional, but useful)
-        summary = md.get("summary")
-        summary_line = f"Summary: {summary}" if summary else ""
 
-        block = "\n".join([x for x in [header, summary_line, "Excerpt:", d.page_content] if x])
+
+        block = "\n".join([x for x in [header, "Excerpt:", d.page_content] if x])
         blocks.append(block)
 
     return "\n\n---\n\n".join(blocks)
@@ -75,13 +72,9 @@ def pipeline(model: ChatOllama, collection='Stat-RAG-200-100') -> str:
         EnsembleRetriever: The retriever configured for the pipeline.
     """
 
-    structured_llm = model.with_structured_output(RAGResponse)
-
     db = Database()
     db = db.get_or_init_collection()
     ret = db.get_retriever(collection)
-    llm = model
-
     load_dotenv()
 
     system_template = """
@@ -93,7 +86,8 @@ def pipeline(model: ChatOllama, collection='Stat-RAG-200-100') -> str:
     2. **Supplement if Needed:** If the context is missing specific details, says from the supplement documents, you can't answer the question.
     3. **Be Concise:** Get straight to the point but answer all the questions and requests.
     4. **Be Credible** Provide in-text citations (MLA format) of the materials you used.
-    5. **Consistent** Provide in the structure: answer then citations at the end following MLA format
+    5. **Consistent** Provide in the structure: answer then citations at the end following MLA format. If the provided context does not contain explicit
+     author, title, or year information, you must return an empty list [] for the citations field. Do not invent citations.
     ### Context
     {context}
 

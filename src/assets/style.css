@@ -1,0 +1,34 @@
+* {
+    background: #1B2021;
+    color: #3DE5FC;
+
+}
+
+.user-input {
+    color: #1B2021;
+}
+
+
+.submit-btn {
+    background-color: #01A9BF;
+    cursor: pointer;
+    padding: 10px 20px;
+    margin-top: 10px;
+    color: white;
+    font-weight: bold;
+    border: none;
+    border-radius: 5px;
+
+}
+
+.answer-box {
+    padding: 15px;
+    border-radius: 5px;
+    min-height: 50px;
+    border: solid;
+
+}
+
+.answer-content {
+    color: #E3FCFF !important;
+}

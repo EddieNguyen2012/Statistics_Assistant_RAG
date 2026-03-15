@@ -45,7 +45,7 @@ def query_your_rag_system(user_query):
 app.layout = html.Div(
     style={'fontFamily': 'Arial, sans-serif', 'maxWidth': '800px', 'margin': '0 auto', 'padding': '20px'}, children=[
 
-        html.H1("Knowledge Base Assistant (RAG)", style={'textAlign': 'center'}),
+        html.H1("Statistical Methods Assistant (RAG)", style={'textAlign': 'center'}),
         html.Hr(),
 
         # Input Section
@@ -53,15 +53,16 @@ app.layout = html.Div(
             html.Label("Ask a question:", style={'fontWeight': 'bold'}),
             dcc.Textarea(
                 id='user-input',
+                className='user-input',
                 placeholder='Type your question here...',
                 style={'width': '100%', 'height': '100px', 'marginTop': '10px', 'padding': '10px'}
             ),
             html.Button(
                 'Submit Query',
                 id='submit-button',
+                className='submit-btn',
                 n_clicks=0,
-                style={'marginTop': '10px', 'padding': '10px 20px', 'cursor': 'pointer', 'backgroundColor': '#007BFF',
-                       'color': 'white', 'border': 'none', 'borderRadius': '5px'}
+
             ),
         ]),
 
@@ -74,12 +75,11 @@ app.layout = html.Div(
                 html.Div(id='rag-output-container', children=[
 
                     # Answer Display
-                    html.Div([
+                    html.Div(
+                        [
                         html.H3("Answer:"),
-                        html.Div(children=[dcc.Markdown(id='answer-output')],
-
-                                 style={'padding': '15px', 'backgroundColor': '#f8f9fa', 'borderRadius': '5px',
-                                        'minHeight': '50px'})
+                        html.Div(children=[dcc.Markdown(id='answer-output', className='answer-content')],
+                                 className='answer-box')
 
                     ]),
                     html.Div([

@@ -20,18 +20,6 @@ default_db_path = parent_dir.parent / 'vector_db'
 default_doc_path = parent_dir.parent / 'RAG_Docs'
 load_dotenv()
 hf_token = os.getenv("HF_TOKEN")
-#
-
-## From Gemini for summarizing page
-# 1. Define the structure you want the LLM to return
-class ChunkEnrichment(BaseModel):
-    heading: str = Field(description="The specific section or chapter title this text belongs to.")
-    summary: str = Field(description="A 1-sentence summary of the statistical concepts discussed.")
-
-# 2. Initialize Ollama
-# We set temperature to 0 for consistent, factual metadata extraction
-
-##
 
 # Default metadata from LangChain:
 #   'producer', 'creator', 'creationdate', 'author', 'category', 'comments',
@@ -49,34 +37,11 @@ def extract_metadata_by_page(chunks: list[Document]):
     Returns:
         tuple: A tuple containing a list of generated chunk IDs and the list of enriched Document objects.
     """
-    # llm = ChatOllama(model="llama3.1", format="json", temperature=0)
-    # parser = JsonOutputParser(pydantic_object=ChunkEnrichment)
-    #
-    # # 3. Create the Enrichment Chain
-    # prompt = ChatPromptTemplate.from_template(
-    #     "You are a statistical assistant. Analyze the following text chunk from a book.\n"
-    #     "Extract a concise heading and a 1-sentence summary.\n"
-    #     "{format_instructions}\n"
-    #     "Text: {context}"
-    # )
-    # chain = prompt | llm | parser
     chunk_ids = []
     enriched_chunks = []
-    # metadata = chunks[0].metadata
-    # print(f"Extracting topics from page {metadata['page']}/{metadata['total_pages']}.")
-
     for i, chunk in enumerate(chunks):
         original_meta = chunk.metadata
-
-        # prediction = chain.invoke({
-        #     "context": chunk.page_content,  # Send first 1k chars to save tokens
-        #     "format_instructions": parser.get_format_instructions()
-        # })
-
-
         new_metadata = {
-            # "heading": prediction.get("heading"),
-            # "summary": prediction.get("summary"),
             "page": original_meta.get("page", 0) + 1,
             "title": original_meta.get("title", "Testing Statistical Assumptions"),
             "subject": original_meta.get("subject", ""),
@@ -87,7 +52,6 @@ def extract_metadata_by_page(chunks: list[Document]):
         chunk.metadata = new_metadata
         enriched_chunks.append(chunk)
         chunk_ids.append(chunk_id)
-        # if i % 10 == 0: print(f"Processed {i}/{len(chunks)} chunks...")
 
     return chunk_ids, enriched_chunks
 
@@ -389,7 +353,7 @@ class Database:
 
             chroma_retriever = vector_stores.as_retriever(
                 search_type='similarity',
-                search_kwargs={"k": 10}
+                search_kwargs={"k": 5}
             )
 
             data = vector_stores.get(include=['documents', 'metadatas'])
@@ -398,11 +362,11 @@ class Database:
             ]
 
             bm25_retriever = BM25Retriever.from_documents(documents=all_docs)
-            bm25_retriever.k = 10
+            bm25_retriever.k = 5
 
             ensemble_retriever = EnsembleRetriever(
                 retrievers=[bm25_retriever, chroma_retriever],
-                weights=[0.5, 0.5]
+                weights=[0.7, 0.3]
             )
 
             return ensemble_retriever
