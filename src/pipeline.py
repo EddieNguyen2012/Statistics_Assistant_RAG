@@ -84,7 +84,7 @@ def pipeline(model: ChatOllama, collection='Stat-RAG-200-100') -> str:
     2. **Supplement if Needed:** If the context is missing specific details, says from the supplement documents, you can't answer the question.
     3. **Be Concise:** Get straight to the point but answer all the questions and requests.
     4. **Be Credible** Provide in-text citations (MLA format) of the materials you used.
-    5. **Consistent** Provide in the structure: answer then citations at the end following MLA format. If the provided context does not contain explicit
+    5. **Consistent** Provide in the structure: always provide answer then include citations at the end following MLA format. If the provided context does not contain explicit
      author, title, or year information, you must return an empty list [] for the citations field. Do not invent citations.
     ### Context
     {context}

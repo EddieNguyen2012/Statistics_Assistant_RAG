@@ -31,16 +31,14 @@ def query_your_rag_system(user_query):
         response = chain.invoke(user_query)
         # response is now a RAGResponse (Pydantic object)
         generated_answer = response.to_str()
-        retrieved_sources = response.citations
-        retrieved_sources = [row.to_str() for row in retrieved_sources]
     except Exception as e:
         generated_answer = str(e)
         retrieved_sources = ["None"]
 
-    return generated_answer, retrieved_sources
+    return generated_answer
 
 app.layout = html.Div(
-    style={'fontFamily': 'Arial, sans-serif', 'maxWidth': '800px', 'margin': '0 auto', 'padding': '20px'}, children=[
+    style={'maxWidth': '800px', 'margin': '0 auto', 'padding': '20px'}, children=[
 
         html.H1("Statistical Methods Assistant (RAG)", style={'textAlign': 'center'}),
         html.Hr(),
@@ -79,10 +77,7 @@ app.layout = html.Div(
                                  className='answer-box')
 
                     ]),
-                    html.Div([
-                        html.H4("Retrieved Sources:"),
-                        html.Ul(id='sources-output', style={'color': '#555'})
-                                ], style={'marginTop': '20px'})
+
 
                 ], style={'display': 'none'})  # Hidden until first query
             ]
@@ -92,8 +87,7 @@ app.layout = html.Div(
 
 @app.callback(
     [Output('rag-output-container', 'style'),
-     Output('answer-output', 'children'),
-     Output('sources-output', 'children')],
+     Output('answer-output', 'children'),],
     [Input('submit-button', 'n_clicks')],
     [State('user-input', 'value')],
     prevent_initial_call=True
@@ -106,19 +100,14 @@ def process_query(n_clicks, user_query):
     if not user_query or user_query.strip() == "":
         return {'display': 'block'}, "Please enter a valid question.", []
 
-    answer, sources = query_your_rag_system(user_query)
+    answer = query_your_rag_system(user_query)
 
     safe_answer = str(answer)
 
-    if sources and sources != ["None"]:
-        sources_html = [html.Li(source) for source in sources]
-    else:
-        sources_html = [html.Li("No sources found.")]
 
     # Return: 1. Show container, 2. The safe string answer, 3. The HTML list items
-    return {'display': 'block'}, safe_answer, sources_html
+    return {'display': 'block'}, safe_answer
 
 
-# --- 4. RUN SERVER ---
 if __name__ == '__main__':
     app.run(debug=False)
