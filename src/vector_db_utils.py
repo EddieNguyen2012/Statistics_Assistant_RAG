@@ -1,4 +1,3 @@
-import os
 import chromadb
 from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 from langchain_classic.retrievers import EnsembleRetriever
@@ -6,11 +5,7 @@ from langchain_community.retrievers import BM25Retriever
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 import os
-from langchain_ollama import ChatOllama
 from langchain_core.documents import Document
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import JsonOutputParser
-from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from src.Ingestion import DocIngestion
 from pathlib import Path

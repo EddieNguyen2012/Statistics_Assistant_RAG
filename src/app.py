@@ -2,11 +2,8 @@ import dash
 from dash import html, dcc, Input, Output, State
 import time
 from src.pipeline import pipeline_enforced
-import json
 from langchain_ollama import ChatOllama
-# from langchain_community.chat_models import ChatOpenAI
-# import getpass
-# import os
+
 
 
 # Initialize the Dash app
@@ -102,17 +99,17 @@ app.layout = html.Div(
     prevent_initial_call=True
 )
 def process_query(n_clicks, user_query):
+    """
+    This callback function processes a user query and returns a response from a RAG system.
+    It updates the UI with the styling of a container, the answer from the system, and a list of sources.
+    """
     if not user_query or user_query.strip() == "":
         return {'display': 'block'}, "Please enter a valid question.", []
 
-    # Call your RAG function
     answer, sources = query_your_rag_system(user_query)
 
-    # FIX 1: Force the answer to be a string just in case the RAG system
-    # threw an error and returned an Exception object.
     safe_answer = str(answer)
 
-    # FIX 2: Uncomment this! Turn the raw strings into Dash HTML components
     if sources and sources != ["None"]:
         sources_html = [html.Li(source) for source in sources]
     else:
@@ -124,4 +121,4 @@ def process_query(n_clicks, user_query):
 
 # --- 4. RUN SERVER ---
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=False)

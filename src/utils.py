@@ -5,7 +5,6 @@ def metric_parser(stats, name):
     feedback = stats.get('feedback_stats', {}).get(name, {})
 
 
-    # Format the metrics
     avg_score = feedback.get('avg', 0)
     stdev = feedback.get('stdev', 0)
 

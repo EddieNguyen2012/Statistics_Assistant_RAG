@@ -1,7 +1,5 @@
-
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables.passthrough import RunnablePassthrough
 from dotenv import load_dotenv
 from langchain_ollama import ChatOllama
 
@@ -139,11 +137,10 @@ def pipeline_enforced(model):
         ("human", "{question}")
     ])
 
-    # 3. Build the chain with ONLY the structured_llm
     chain = (
             {'context': ret | format_docs, "question": RunnablePassthrough()}
             | prompt_template
-            | structured_llm  # <-- Make sure this is the ONLY model in the chain
+            | structured_llm
     )
 
     return chain

@@ -21,31 +21,27 @@ def valid_reasoning(inputs: dict, outputs: dict) -> bool:
                      Example: {'answer': '4', 'reasoning': '2 plus 2 equals 4.'}
     :return: True if the reasoning is logically valid, False otherwise.
     """
-    # Define the evaluation criteria
     instructions = """
     Given the following question, answer, and reasoning, determine if the reasoning for the answer is logically valid
     and consistent with the question and the answer.
     """
 
-    # Use structured output to get a boolean score
     class Response(BaseModel):
         reasoning_is_valid: bool
 
-    # Construct the prompt with the actual inputs and outputs
     msg = f"Question: {inputs.get('question', '')}\nAnswer & Reasoning: {outputs.get('answer', '')}"
 
     # Call the local Ollama LLM to judge the output using the Pydantic schema
     response = ollama.chat(
-        model="deepseek-r1", # Make sure to pull a capable model for judging, e.g., 'ollama pull llama3.1:8b'
+        model="deepseek-r1",
         messages=[
             {"role": "system", "content": instructions},
             {"role": "user", "content": msg}
         ],
         format=Response.model_json_schema(),
-        options={"temperature": 0.0} # Keep temperature at 0 for deterministic evaluation
+        options={"temperature": 0.0}
     )
 
-    # Parse the guaranteed JSON string back into a Python dictionary
     try:
         parsed_data = json.loads(response['message']['content'])
         return parsed_data.get("reasoning_is_valid", False)
@@ -67,7 +63,6 @@ def check_faithfulness(inputs: dict, outputs: dict) -> float:
               A score of 1.0 indicates perfect faithfulness, while 0.0 indicates no faithfulness.
     """
 
-    # Define the nested structure for the LLM to follow
     class ClaimVerification(BaseModel):
         claim: str
         is_supported: bool
@@ -97,11 +92,9 @@ def check_faithfulness(inputs: dict, outputs: dict) -> float:
         parsed_data = json.loads(response['message']['content'])
         claims_list = parsed_data.get("extracted_claims", [])
 
-        # Prevent division by zero if the LLM extracts nothing
         if not claims_list:
             return 0.0
 
-        # Calculate the ratio
         supported_count = sum(1 for item in claims_list if item.get("is_supported") is True)
         total_claims = len(claims_list)
 
