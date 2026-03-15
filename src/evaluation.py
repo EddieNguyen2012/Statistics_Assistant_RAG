@@ -1,6 +1,4 @@
 from langsmith import evaluate, traceable
-from openevals.llm import create_llm_as_judge
-from openevals.prompts import CORRECTNESS_PROMPT
 from src.pipeline import pipeline
 from langsmith import Client
 from pathlib import Path
@@ -8,6 +6,7 @@ import pandas as pd
 from langchain_ollama import ChatOllama
 from langsmith.utils import LangSmithConflictError
 from pydantic import BaseModel
+from typing import List
 import ollama
 import json
 
@@ -55,15 +54,17 @@ def valid_reasoning(inputs: dict, outputs: dict) -> bool:
         return False
 
 
-import json
-from pydantic import BaseModel
-from typing import List
-
-
 def check_faithfulness(inputs: dict, outputs: dict) -> float:
     """
-    Calculates Faithfulness score: No. of supported claims / Total no. of claims.
-    Returns a float between 0.0 and 1.0.
+    :summary: Checks the faithfulness of an LLM's answer to a given context.
+
+    :param inputs: A dictionary containing the 'context' and 'answer' keys,
+                   where 'context' is the source text and 'answer' is the LLM's response.
+                   The keys are strings.
+    :param outputs: A dictionary containing the 'context' and 'answer' keys.
+                   The keys are strings.
+    :return: A float representing the faithfulness score, ranging from 0.0 to 1.0.
+              A score of 1.0 indicates perfect faithfulness, while 0.0 indicates no faithfulness.
     """
 
     # Define the nested structure for the LLM to follow
@@ -124,7 +125,7 @@ def eval_model(inputs: dict) -> dict:
              model's response.
     """
     response = chain.invoke(inputs.get('question'))
-    return {"answer": response}
+    return {"answer": response.answer}
 
 
 def evaluate_rag(data):
@@ -152,8 +153,6 @@ def evaluate_rag(data):
     return res
 
 
-
-
 if __name__ == "__main__":
     parent_dir = Path(__name__).parent.resolve()
     client = Client()
@@ -161,7 +160,7 @@ if __name__ == "__main__":
     # The path to your local CSV file
     csv_file = str(parent_dir.parent / "evaluation.csv")
     df = pd.read_csv(csv_file)
-    chain = pipeline(model=ChatOllama(model='gemma3', temperature=0))
+    chain = pipeline(model=ChatOllama(model='gemma3', temperature=0), collection='Stat-RAG-250-100')
 
     ds = []
     for entry in df.iterrows():

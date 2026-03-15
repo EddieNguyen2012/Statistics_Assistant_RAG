@@ -30,17 +30,7 @@ class ChunkEnrichment(BaseModel):
 
 # 2. Initialize Ollama
 # We set temperature to 0 for consistent, factual metadata extraction
-llm = ChatOllama(model="gemma-3", format="json", temperature=0)
-parser = JsonOutputParser(pydantic_object=ChunkEnrichment)
 
-# 3. Create the Enrichment Chain
-prompt = ChatPromptTemplate.from_template(
-    "You are a statistical assistant. Analyze the following text chunk from a book.\n"
-    "Extract a concise heading and a 1-sentence summary.\n"
-    "{format_instructions}\n"
-    "Text: {context}"
-)
-chain = llm | parser | prompt
 ##
 
 # Default metadata from LangChain:
@@ -59,9 +49,20 @@ def extract_metadata_by_page(chunks: list[Document]):
     Returns:
         tuple: A tuple containing a list of generated chunk IDs and the list of enriched Document objects.
     """
+    # llm = ChatOllama(model="llama3.1", format="json", temperature=0)
+    # parser = JsonOutputParser(pydantic_object=ChunkEnrichment)
+    #
+    # # 3. Create the Enrichment Chain
+    # prompt = ChatPromptTemplate.from_template(
+    #     "You are a statistical assistant. Analyze the following text chunk from a book.\n"
+    #     "Extract a concise heading and a 1-sentence summary.\n"
+    #     "{format_instructions}\n"
+    #     "Text: {context}"
+    # )
+    # chain = prompt | llm | parser
     chunk_ids = []
     enriched_chunks = []
-    metadata = chunks[0].metadata
+    # metadata = chunks[0].metadata
     # print(f"Extracting topics from page {metadata['page']}/{metadata['total_pages']}.")
 
     for i, chunk in enumerate(chunks):
@@ -103,6 +104,33 @@ def connect_db(path=default_db_path):
     client = chromadb.PersistentClient(path=path)
     return client
 
+def insert_doc(conn, ingestor, collection, file):
+    """
+    Populates the vector database with documents from the ingestor's directory.
+    Chunks are processed individually and metadata is enriched page-by-page.
+
+    Args:
+        conn (Database): The database connection object.
+        ingestor (DocIngestion): The document ingestion object containing the documents path.
+        collection (str): The name of the collection where documents will be inserted.
+    """
+
+    # I am worried about in-place memory usage when batch chunking so I decided to chunk individually
+    print(f"Processing {file}")
+    chunks = ingestor.individual_ingest(os.path.join(ingestor.docs_path, file))
+    current_page = 0
+    current_chunks = []
+    for i, chunk in enumerate(chunks):
+        # print(f'Working on page {current_page} of {file}')
+        if chunk.metadata['page'] == current_page:
+            current_chunks.append(chunk)
+        else:
+            if len(current_chunks) > 0:
+                ids, current_chunks = extract_metadata_by_page(current_chunks)
+                conn.upsert_docs(ids=ids, docs=current_chunks, collection=collection)
+            current_chunks = []
+            current_page += 1
+
 def populate_db(conn, ingestor, collection):
     """
     Populates the vector database with documents from the ingestor's directory.
@@ -122,6 +150,7 @@ def populate_db(conn, ingestor, collection):
         current_page = 0
         current_chunks = []
         for i, chunk in enumerate(chunks):
+            # print(f'Working on page {current_page} of {file}')
             if chunk.metadata['page'] == current_page:
                 current_chunks.append(chunk)
             else:
@@ -193,6 +222,15 @@ class Database:
         """
         collection = self.get_collection(collection)
         collection.add(ids=ids, documents=[doc.page_content for doc in docs], metadatas=[doc.metadata for doc in docs])
+
+    def insert_new_book(self, file):
+        insert_doc(
+            conn=self,
+            ingestor=DocIngestion(docs_path=default_doc_path, chunk_size=200, chunk_overlap=100),
+            collection='Stat-RAG-200-100',
+            file=file
+        )
+
 
     def get_docs_by_ids(self, doc_ids, collection, embedding: bool):
         """
@@ -351,7 +389,7 @@ class Database:
 
             chroma_retriever = vector_stores.as_retriever(
                 search_type='similarity',
-                search_kwargs={"k": 3}
+                search_kwargs={"k": 10}
             )
 
             data = vector_stores.get(include=['documents', 'metadatas'])
@@ -360,14 +398,15 @@ class Database:
             ]
 
             bm25_retriever = BM25Retriever.from_documents(documents=all_docs)
-            bm25_retriever.k = 3
+            bm25_retriever.k = 10
 
             ensemble_retriever = EnsembleRetriever(
                 retrievers=[bm25_retriever, chroma_retriever],
-                weights=[0.7, 0.3]
+                weights=[0.5, 0.5]
             )
 
             return ensemble_retriever
         except Exception as e:
             print(f"Error: {e}")
+            return None
 
